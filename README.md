@@ -10,6 +10,30 @@ Although it was developed for the purpose of monitoring dynamic css files for
 changes and auto-regenerating their output, it can easily be transformed into
 a watchdog for just about anything. 
 
+Usage 
+-----
+
+```bash
+./watchdog --types styl --watch /var/www/vhosts/clients/ReTargeter/public/css/
+./watchdog --types styl,sass,scss,less --watch /var/www/vhosts/clients/ReTargeter/public/css/
+./watchdog --config /path/to/config
+./watchdog --help
+```
+
+Example Config File (written in PHP, requires return):
+
+```php
+<?php
+return array(
+    'types' => array('sass', 'scss', 'less', 'styl'),
+    'watch' => array(
+        '/path/to/public/css',
+        '/path/to/alternate/css'
+    ),
+    'minify' => true
+);
+```
+
 Requirements
 ------------
 
