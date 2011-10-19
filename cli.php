@@ -1,0 +1,161 @@
+<?php
+// ensure we're in the command line
+if (PHP_SAPI !== 'cli') {
+    die('You may only execute the watchdog from the command line.');
+} else if (!function_exists('inotify_init')) {
+    die('You must have the PEAR inotify package installed.');
+}
+
+// generate command line options
+$shortopts  = "";
+$shortopts .= "t:";    // specify file extensions to watch
+$shortopts .= "w:";    // specify directories to watch
+$shortopts .= "c:";    // alternatively specify a config file to load
+$shortopts .= "m";    // output the minified version
+$shortopts .= "h";      // help
+$longopts  = array(
+    "types:",          // specify types to auto convert
+    "watch:",          // specify directories to watch
+    "minify",         // output the minified version
+    "config:",         // alternatively specify a config file to load
+    "help"              // help
+);
+
+// current list of valid file extensions
+$validExtensions = array(
+    'sass' => 1,
+    'scss' => 1,
+    'styl' => 1,
+    'less' => 1
+);
+
+// retrieve options
+$options = getopt($shortopts, $longopts);
+
+// check for help
+if (isset($options['h']) || isset($options['help'])) {
+    $output = "Watchdog is a monitor for popular dynamic stylesheet languages.
+
+Usage:
+
+watchdog [options]
+
+Options:
+
+  -t\t--types <extension>\t\tSpecify the file extensions to watch, separated by commas with no spaces (supports sass, scss, less, styl).
+  -w\t--watch <directories>\t\tSpecify the directories to watch for file changes, separated by commas with no spaces.
+  -c\t--config <file>\t\t\tSpecify an absolute/relative path to a config file to load options.
+  -m\t--minify\t\t\tFlag to indicate you wish to minify/compress output.
+  -h\t--help\t\t\t\tThis help documentation.
+
+Example Config File (written in PHP, requires return):
+
+<?php
+return array(
+    'types' => array('sass', 'scss', 'less', 'styl'),
+    'watch' => array(
+        '/path/to/public/css',
+        '/path/to/alternate/css'
+    ),
+    'minify' => true
+);
+";
+    die($output);
+}
+
+// check for a config file to parse
+if (!empty($options['c']) || !empty($options['config'])) {
+    if (!empty($options['c'])) {
+        if (!is_file($options['c'])) {
+            die('The configuration file ' . $options['c'] . ' does not exist.');
+        }
+        $conf = $options['c'];
+    } else if (!empty($options['config'])) {
+        if (!is_file($options['config'])) {
+            die('The configuration file ' . $options['config'] . ' does not exist.');
+        }
+        $conf = $options['config'];
+    }
+
+    // load the config file
+    $config = include_once($conf);
+
+    // console log
+    echo 'Loading the config file ' . $conf . PHP_EOL;
+}
+
+// determine directories to watch
+if (!empty($config['watch'])) {
+    $directoryWatch = $config['watch'];
+} else if (!empty($options['w'])) {
+    $directoryWatch = $options['w'];
+} else if (!empty($options['watch'])) {
+    $directoryWatch = $options['watch'];
+} else {
+    $directoryWatch = './';
+}
+
+if (!is_array($directoryWatch)) {
+    $directoryWatch = explode(',', $directoryWatch);
+}
+
+// do some basic validation on the watch directories
+foreach ($directoryWatch as $k => $d) {
+    if (!is_file($d) && !is_dir($d)) {
+        unset($directoryWatch[$k]);
+        echo $d . ' is not a valid file or directory. Removing from watchdog.' . PHP_EOL;
+    }
+}
+
+if (empty($directoryWatch)) {
+    die('No valid directories are set to be watched. Aborting.');
+}
+
+// console log
+echo 'Watching the following directories:' . PHP_EOL;
+echo '  ' . implode(PHP_EOL . '  ', $directoryWatch) . PHP_EOL . PHP_EOL;
+
+// determine file extensions to watch for
+if (!empty($config['types'])) {
+    $fileExtensions = $config['types'];
+} else if (!empty($options['t'])) {
+    $fileExtensions = $options['t'];
+} else if (!empty($options['types'])) {
+    $fileExtensions = $options['types'];
+} else {
+    $fileExtensions = array(
+        'sass',
+        'scss',
+        'styl',
+        'less'
+    );
+}
+
+if (!is_array($fileExtensions)) {
+    $fileExtensions = explode(',', $fileExtensions);
+}
+
+// do some basic validation on the file extensions
+foreach ($fileExtensions as $k => $f) {
+    if (!isset($validExtensions[$f])) {
+        unset($fileExtensions[$k]);
+        echo $f . ' is not a valid file extension. Removing from watchdog.' . PHP_EOL;
+    }
+}
+
+if (empty($fileExtensions)) {
+    die('No valid file extensions are set to be watched. Aborting.');
+}
+
+// console log
+echo 'Watching the following file extensions: ' . implode(', ', $fileExtensions) . PHP_EOL . PHP_EOL;
+
+// determine if we're minifying file output
+$minified = false;
+if (!empty($config['minify'])) {
+    $minified = true;
+} else if (isset($options['m'])) {
+    $minified = true;
+} else if (isset($options['minify'])) {
+    $minified = true;
+}

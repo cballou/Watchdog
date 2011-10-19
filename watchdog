@@ -1,0 +1,450 @@
+#!/usr/bin/php
+<?php
+// signal handling
+declare(ticks = 1);
+
+// include the CLI helper
+require_once('cli.php');
+
+/**
+ * A PHP class implementing inotify which watches for changes to files in
+ * any given number of directories specified in the input. It will not
+ * recursively check directories, so you must implicitely specify each directory
+ * you want watched.
+ */
+class Watchdog {
+
+    const PAUSE_MS = 500000;
+    const MODE_BLOCKING = 1;
+    const MODE_NONBLOCKING = 0;
+
+    /**
+     * A full list of valid events. The events marked with an asterisk (*) can
+     * occur for files in watched directories. This is overkill, as currently
+     * we're only supporting IN_MODIFY and it's not editable.
+     *
+     * @var array
+     */
+    protected $_validEvents = array(
+        IN_ACCESS,      // File was accessed (read) (*)
+        IN_MODIFY,      // File was modified (*)
+        IN_ATTRIB,      // Metadata changed (e.g. permissions, mtime, etc.) (*)
+        IN_CLOSE_WRITE,     // File opened for writing was closed (*)
+        IN_CLOSE_NOWRITE,   // File not opened for writing was closed (*)
+        IN_OPEN,        // File was opened (*)
+        IN_MOVED_TO,    // File moved into watched directory (*)
+        IN_MOVED_FROM,  // File moved out of watched directory (*)
+        IN_CREATE,      // File or directory created in watched directory (*)
+        IN_DELETE,      // File or directory deleted in watched directory (*)
+        IN_DELETE_SELF, // Watched file or directory was deleted
+        IN_MOVE_SELF,   // Watch file or directory was moved
+        IN_CLOSE,       // Equals to IN_CLOSE_WRITE | IN_CLOSE_NOWRITE
+        IN_MOVE,        // Equals to IN_MOVED_FROM | IN_MOVED_TO
+        IN_ALL_EVENTS,  // Bitmask of all the above constants
+        IN_UNMOUNT,     // File system containing watched object was unmounted
+        IN_Q_OVERFLOW,  // Event queue overflowed (wd is -1 for this event)
+        IN_IGNORED,     // Watch was removed (explicitly by inotify_rm_watch() or because file was removed or filesystem unmounted
+        IN_ISDIR,       // Subject of this event is a directory
+        IN_ONLYDIR,     // Only watch pathname if it is a directory (Since Linux 2.6.15)
+        IN_DONT_FOLLOW, // Do not dereference pathname if it is a symlink (Since Linux 2.6.15)
+        IN_MASK_ADD,    // Add events to watch mask for this pathname if it already exists (instead of replacing mask).
+        IN_ONESHOT      // Monitor pathname for one event, then remove from watch list
+    );
+
+    /**
+     * The list of watched file extensions.
+     *
+     * @var array
+     */
+    protected $_watchedFileExtensions = array();
+
+    /**
+     * The list of ignored files.
+     *
+     * @var array
+     */
+    protected $_ignoredFiles = array();
+
+    /**
+     * Contains an array of all watched files/directories.
+     *
+     * @var array
+     */
+    protected $_watched = array();
+
+    /**
+     * A reverse lookup to find a directory path based on the descriptor.
+     *
+     * @var array
+     */
+    protected $_pathLookup = array();
+
+    /**
+     * An instance of inotify.
+     *
+     * @var resource
+     */
+    protected $_inotify;
+
+    /**
+     * Whether or not we're minifying/compressing the output.
+     *
+     * @var bool
+     */
+    protected $_minify = false;
+
+    /**
+     * Default constructor.
+     *
+     * @access  public
+     * @param   array   $directories
+     * @param   array   $fileExtensions
+     * @param   bool    $minify
+     * @param   array   $ignoredFiles
+     * @return  void
+     */
+    public function __construct(
+        $directories = array(),
+        $fileExtensions = array(),
+        $minify = false,
+        $ignoredFiles = array()
+    )
+    {
+        // initial validation
+        if (empty($fileExtensions)) {
+            die('You must watch at least one of the following file extensions: sass, scss, less, styl');
+        }
+
+        // store the watched file extensions
+        $this->_watchedFileExtensions = $fileExtensions;
+
+        // store any ignored files
+        $this->_ignoredFiles = $ignoredFiles;
+
+        // store minify flag
+        $this->_minify = $minify;
+
+        // initialize an inotify instance
+        $this->_inotify = inotify_init();
+
+        // don't block the stream
+        stream_set_blocking($this->_inotify, self::MODE_NONBLOCKING);
+
+        // watch files within specific directories (on modify)
+        foreach ($directories as $d) {
+            $this->add($d);
+        }
+
+        // initialize the watchdog
+        $this->init();
+    }
+
+    /**
+     * Continuous watching.
+     *
+     * @access  public
+     * @return  void
+     */
+    public function init()
+    {
+        pcntl_signal(SIGTERM, array(&$this, "signal_handler"));
+        pcntl_signal(SIGINT, array(&$this, "signal_handler"));
+
+        // begin the watchdog
+        while(1) {
+            // watch
+            $this->watch();
+
+            // pause before checking again
+            usleep(self::PAUSE_MS);
+        }
+    }
+
+    /**
+     * Perform the actual check for file changes.
+     *
+     * @access  public
+     * @return  void
+     */
+    public function watch()
+    {
+        // check for any changes
+        $events = $this->read();
+        if (!empty($events)) {
+            // ensure we don't have duplicate events (it happens...)
+            $events = $this->_array_unique($events);
+
+            // iterate over events
+            foreach ($events as $e) {
+                // handle the event
+                $filename = $e['name'];
+
+                // check if we actually need to do anything with the file
+                $ext = strtolower(substr($filename, strrpos($filename, '.') + 1));
+                if (in_array($ext, $this->_watchedFileExtensions)) {
+
+                    // generate the full path to the file
+                    $dirpath =
+                        rtrim($this->_pathLookup[$e['wd']], DIRECTORY_SEPARATOR) .
+                        DIRECTORY_SEPARATOR;
+
+                    $filepath = $dirpath . $filename;
+
+                    // notify of detected change
+                    echo 'Change detected in: ' . $filepath . PHP_EOL;
+
+                    // perform the update on the command line
+                    switch ($ext) {
+                        case 'sass':
+                        case 'scss':
+                            $output = $this->_executeSassCmd($filepath, $dirpath, $ext);
+                            break;
+                        case 'less':
+                            $output = $this->_executeLessCmd($filepath, $dirpath, $ext);
+                            break;
+                        case 'styl':
+                            $output = $this->_executeStylusCmd($filepath, $dirpath, $ext);
+                            break;
+                    }
+
+                    // display to STDOUT
+                    echo $output . PHP_EOL;
+                }
+            }
+        }
+    }
+
+    /**
+     * Add a new file/folder to watch. The return value is a unique (inotify
+     * instance wide) watch descriptor.
+     *
+     * @access  public
+     * @param   string  $path
+     * @param   array   $events     A masked integer of all events
+     *
+     */
+    public function add($path, $events = IN_MODIFY)
+    {
+        // check if we need to first remove a matching path
+        if (isset($this->_watched[$path])) {
+            $this->remove($path);
+        }
+
+        // add the new watch
+        $descriptor = inotify_add_watch($this->_inotify, $path, $events);
+
+        // create the array
+        $info = array(
+            'events' => $events,
+            'descriptor' => $descriptor
+        );
+
+        // create a reverse lookup on the descriptor
+        $this->_pathLookup[$descriptor] = $path;
+
+        // add to watched list
+        $this->_watched[$path] = $info;
+    }
+
+    /**
+     * Removes an inotify watch.
+     *
+     * @access  public
+     * @param   string  $path
+     * @return  mixed
+     */
+    public function remove($path)
+    {
+        if (isset($this->_watched[$path])) {
+            if (inotify_rm_watch($this->_inotify, $this->_watched[$path]['descriptor'])) {
+                unset($this->_pathLookup[ $this->_watched[$path]['descriptor'] ]);
+                unset($this->_watched[$path]);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Remove all inotify watches.
+     *
+     * @access  public
+     * @return  void
+     */
+    public function removeAll()
+    {
+        foreach ($this->_watched as $path => $watch) {
+            if (inotify_rm_watch($this->_inotify, $watch['descriptor'])) {
+                unset($this->_pathLookup[ $watch['descriptor'] ]);
+                unset($this->_watched[$path]);
+            }
+        }
+    }
+
+    /**
+     * Read events from an inotify instance. Returns an array of inotify events
+     * or FALSE if no events was pending and inotify_instance is non-blocking.
+     * Each event is an array with the following keys:
+     *
+     *   - wd is a watch descriptor returned by inotify_add_watch()
+     *   - mask is a bit mask of events
+     *   - cookie is a unique id to connect related events (e.g. IN_MOVE_FROM and IN_MOVE_TO)
+     *   - name is the name of a file (e.g. if a file was modified in a watched directory)
+     *
+     * @access  public
+     * @return  mixed
+     */
+    public function read()
+    {
+        return inotify_read($this->_inotify);
+    }
+
+    /**
+     * Retrieves the number of pending events.
+     *
+     * @access  public
+     * @return  int
+     */
+    public function getPendingEventsCount()
+    {
+        return inotify_queue_len($this->_inotify);
+    }
+
+    /**
+     * Handle the signals. Gracefully removes all inotify watches before closing.
+     *
+     * @access  public
+     * @param   int     $signal
+     */
+    public function signal_handler($signal)
+    {
+        switch($signal) {
+            case SIGTERM:
+                $this->removeAll();
+                echo 'Caught the signal SIGTERM. Now exiting.' . PHP_EOL;
+                exit;
+            case SIGKILL:
+                $this->removeAll();
+                print 'Caught the signal SIGKILL. Now exiting.' . PHP_EOL;
+                exit;
+            case SIGINT:
+                $this->removeAll();
+                print 'Caught the signal SIGINT. Now exiting.' . PHP_EOL;
+                exit;
+        }
+    }
+
+    /**
+     * Execute the SASS command for generating output. As a side note, SASS
+     * can output styles of nested (default), compact, compressed, or expanded.
+     * We currently only handle one case.
+     *
+     * @access  public
+     * @param   string  $inFile
+     * @param   string  $path
+     * @param   string  $ext
+     * @return  void
+     */
+    protected function _executeSassCmd($inFile, $path, $ext)
+    {
+        // generate the outfile name
+        $outFile = $this->_generateOutFile($inFile, $ext);
+
+        // create the command
+        if ($this->_minify) {
+            $cmd = 'sass -I ' . $path . ' --style compressed ' . $inFile . ' ' . $outFile;
+        } else {
+            $cmd = 'sass -I ' . $path . ' ' . $inFile . ' ' . $outFile;
+        }
+
+        // execute the command and display output
+        return shell_exec($cmd);
+    }
+
+    /**
+     * Execute the LESS command for generating output. Note that the include
+     * path needs to be relative to the directory that lessc is executing in.
+     *
+     * @access  public
+     * @param   string  $inFile
+     * @param   string  $path
+     * @param   string  $ext
+     * @return  void
+     */
+    protected function _executeLessCmd($inFile, $path, $ext)
+    {
+        // generate the outfile name
+        $outFile = $this->_generateOutFile($inFile, $ext);
+
+        // create the command
+        if ($this->_minify) {
+            $cmd = 'lessc -x --include-path ' . $path . ' ' . $inFile . ' > ' . $outFile;
+        } else {
+            $cmd = 'lessc --include-path ' . $path . ' ' . $inFile . ' > ' . $outFile;
+        }
+
+        // execute the command and display output
+        return shell_exec($cmd);
+    }
+
+    /**
+     * Execute the Stylus command for generating output. More documentation on
+     * CLI arguments for stylus are available at:
+     *
+     * http://learnboost.github.com/stylus/docs/executable.html
+     *
+     * @access  public
+     * @param   string  $inFile
+     * @param   string  $path
+     * @param   string  $ext
+     * @return  void
+     */
+    protected function _executeStylusCmd($inFile, $path, $ext)
+    {
+        // generate the outfile name
+        $outFile = $this->_generateOutFile($inFile, $ext);
+
+        // create the command
+        if ($this->_minify) {
+            $cmd = 'stylus -c -I ' . $path . ' < ' . $inFile . ' > ' . $outFile;
+        } else {
+            $cmd = 'stylus -I ' . $path . ' < ' . $inFile . ' > ' . $outFile;
+        }
+
+        // execute the command and display output
+        return shell_exec($cmd);
+    }
+
+    /**
+     * Given a full path to a file, return the same file with a
+     * CSS extension.
+     *
+     * @access  protected
+     * @param   string      $inFile
+     * @param   string      $ext
+     * @return  string
+     */
+    protected function _generateOutFile($inFile, $ext)
+    {
+        return substr($inFile, 0, strrpos($inFile, '.')) . '.css';
+    }
+
+    /**
+     * De-dupe a multi-dimensional array.
+     *
+     * @access  protected
+     * @param   array       $arr
+     * @return  array
+     */
+    protected function _array_unique($arr) {
+        return array_map(
+            'unserialize',
+            array_unique(array_map('serialize', $arr))
+        );
+    }
+
+}
+
+// load the watchdog
+$watchdog = new Watchdog($directoryWatch, $fileExtensions, $minified);
