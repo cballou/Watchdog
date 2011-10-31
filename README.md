@@ -15,7 +15,7 @@ Usage
 
 ```bash
 ./watchdog --types styl --watch /var/www/vhosts/clients/ReTargeter/public/css/
-./watchdog --types styl,sass,scss,less --watch /var/www/vhosts/clients/ReTargeter/public/css/
+./watchdog --types styl,sass,scss,less,jade,haml --watch /var/www/vhosts/clients/ReTargeter/public/css/
 ./watchdog --config /path/to/config
 ./watchdog --help
 ```
@@ -25,7 +25,7 @@ Example Config File (written in PHP, requires return):
 ```php
 <?php
 return array(
-    'types' => array('sass', 'scss', 'less', 'styl'),
+    'types' => array('sass', 'scss', 'less', 'styl', 'jade', 'haml'),
     'watch' => array(
         '/path/to/public/css',
         '/path/to/alternate/css'
@@ -56,12 +56,16 @@ watchdog assumes that you have one or more of the following modules installed
 * SASS
 * LESS
 * Stylus
+* Jade
+* HAML
 
 Each of these applications have their own set of dependencies.
 
 * SASS - Requires Ruby and RubyGems
 * LESS - Requires nodejs and npm
 * Stylus - Requires nodejs and npm
+* Jade - Requires nodejs and npm
+* HAML - Requires Ruby and RubyGems
 
 "sass: command not found"
 ---------------------
@@ -83,6 +87,8 @@ ensure you have the LESS npm module installed globally:
 sudo npm install -g less
 ```
 
+We specify the global option because you would otherwise be left with modules installed to your base installation directory.
+
 "stylus: command not found"
 ---------------------
 
@@ -93,11 +99,33 @@ ensure you have the stylus npm module installed globally:
 sudo npm install -g stylus
 ```
 
-Otherwise, you are left with modules installed to your base installation directory.
+We specify the global option because you would otherwise be left with modules installed to your base installation directory.
+
+"jade: command not found"
+---------------------
+
+If you are receiving the error "jade: command not found", you will need to
+ensure you have the Jade npm module installed globally:
+
+```bash
+sudo npm install -g jade`
+```
+
+"haml: command not found"
+---------------------
+
+If you are receiving the error "haml: command not found", you will need to
+ensure you have the HAML ruby gem installed:
+
+```bash
+sudo gem install haml-edge`
+```
+
+We specify the global option because you would otherwise be left with modules installed to your base installation directory.
 
 I'm still getting command not found
 ---------------------
-For Node.JS NPM modules (stylus and less), ensure you have the NODE_PATH variable
+For Node.JS NPM modules (stylus, less, and jade), ensure you have the NODE_PATH variable
 appropriately set:
 
 ```bash

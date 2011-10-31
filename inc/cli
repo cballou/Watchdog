@@ -26,7 +26,9 @@ $validExtensions = array(
     'sass' => 1,
     'scss' => 1,
     'styl' => 1,
-    'less' => 1
+    'less' => 1,
+    'haml' => 1,
+    'jade' => 1
 );
 
 // retrieve options
@@ -42,7 +44,7 @@ watchdog [options]
 
 Options:
 
-  -t\t--types <extension>\t\tSpecify the file extensions to watch, separated by commas with no spaces (supports sass, scss, less, styl).
+  -t\t--types <extension>\t\tSpecify the file extensions to watch, separated by commas with no spaces (supports sass, scss, less, styl, haml, jade).
   -w\t--watch <directories>\t\tSpecify the directories to watch for file changes, separated by commas with no spaces.
   -c\t--config <file>\t\t\tSpecify an absolute/relative path to a config file to load options.
   -m\t--minify\t\t\tFlag to indicate you wish to minify/compress output.
@@ -52,7 +54,7 @@ Example Config File (written in PHP, requires return):
 
 <?php
 return array(
-    'types' => array('sass', 'scss', 'less', 'styl'),
+    'types' => array('sass', 'scss', 'less', 'styl', 'haml', 'jade'),
     'watch' => array(
         '/path/to/public/css',
         '/path/to/alternate/css'
@@ -127,7 +129,9 @@ if (!empty($config['types'])) {
         'sass',
         'scss',
         'styl',
-        'less'
+        'less',
+        'haml',
+        'jade'
     );
 }
 
