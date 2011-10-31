@@ -4,7 +4,7 @@
 declare(ticks = 1);
 
 // include the CLI helper
-require_once('cli.php');
+require_once('inc/cli');
 
 /**
  * A PHP class implementing inotify which watches for changes to files in
@@ -191,7 +191,7 @@ class Watchdog {
                     $filepath = $dirpath . $filename;
 
                     // notify of detected change
-                    echo 'Change detected in: ' . $filepath . PHP_EOL;
+                    echo '[' . date('m.d.Y H:i:s') . '] Change detected in: ' . $filepath . PHP_EOL;
 
                     // perform the update on the command line
                     switch ($ext) {
@@ -205,10 +205,18 @@ class Watchdog {
                         case 'styl':
                             $output = $this->_executeStylusCmd($filepath, $dirpath, $ext);
                             break;
+                        case 'haml':
+                            $output = $this->_executeHamlCmd($filepath, $dirpath, $ext);
+                            break;
+                        case 'jade':
+                            $output = $this->_executeJadeCmd($filepath, $dirpath, $ext);
+                            break;
                     }
 
                     // display to STDOUT
-                    echo $output . PHP_EOL;
+                    if (!empty($output)) {
+                        echo $output . PHP_EOL;
+                    }
                 }
             }
         }
@@ -410,6 +418,62 @@ class Watchdog {
             $cmd = 'stylus -c -I ' . $path . ' < ' . $inFile . ' > ' . $outFile;
         } else {
             $cmd = 'stylus -I ' . $path . ' < ' . $inFile . ' > ' . $outFile;
+        }
+
+        // execute the command and display output
+        return shell_exec($cmd);
+    }
+
+    /**
+     * Execute the HAML command for generating output. More documentation on
+     * CLI arguments for HAML are available at:
+     *
+     * http://haml-lang.com/docs/yardoc/file.HAML_REFERENCE.html
+     *
+     * @access  public
+     * @param   string  $inFile
+     * @param   string  $path
+     * @param   string  $ext
+     * @return  void
+     */
+    protected function _executeHamlCmd($inFile, $path, $ext)
+    {
+        // generate the outfile name
+        $outFile = $this->_generateOutFile($inFile, $ext);
+
+        // create the command
+        if ($this->_minify) {
+            $cmd = 'haml --format html5 --style ugly -I ' . $path . ' ' . $inFile . ' ' . $outFile;
+        } else {
+            $cmd = 'haml --format html5 -I ' . $path . ' ' . $inFile . ' ' . $outFile;
+        }
+
+        // execute the command and display output
+        return shell_exec($cmd);
+    }
+
+    /**
+     * Execute the Jade command for generating output. More documentation on
+     * CLI arguments for Jade are available at:
+     *
+     * http://haml-lang.com/docs/yardoc/file.HAML_REFERENCE.html
+     *
+     * @access  public
+     * @param   string  $inFile
+     * @param   string  $path
+     * @param   string  $ext
+     * @return  void
+     */
+    protected function _executeJadeCmd($inFile, $path, $ext)
+    {
+        // generate the outfile name
+        $outFile = $this->_generateOutFile($inFile, $ext);
+
+        // create the command
+        if ($this->_minify) {
+            $cmd = 'jade -p ' . $path . ' < ' . $inFile . ' > ' . $outFile;
+        } else {
+            $cmd = 'jade -p ' . $path . ' < ' . $inFile . ' > ' . $outFile;
         }
 
         // execute the command and display output
