@@ -135,6 +135,9 @@ class Watchdog {
             $this->add($d);
         }
 
+        // alert
+        @system('notify-send Watchdog "Watchdog is now actively monitoring for changes to the following file extensions: ' . "\n\n" . implode(', ', $fileExtensions) . '"');
+
         // initialize the watchdog
         $this->init();
     }
@@ -192,6 +195,8 @@ class Watchdog {
 
                     // notify of detected change
                     echo '[' . date('m.d.Y H:i:s') . '] Change detected in: ' . $filepath . PHP_EOL;
+                    $msg = "A change was detected in file:\n$filepath\n\nRe-compiled.";
+                    @system('notify-send Watchdog "' . $msg . '"');
 
                     // perform the update on the command line
                     switch ($ext) {
