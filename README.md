@@ -10,6 +10,9 @@ Although it was developed for the purpose of monitoring dynamic css files for
 changes and auto-regenerating their output, it can easily be transformed into
 a watchdog for just about anything. 
 
+Watchdog currently supports compilation of Stylus, SASS, LESS, Jade, and HAML.
+If you have anything else you'd like added to the list, let me know!
+
 Usage 
 -----
 
