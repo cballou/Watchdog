@@ -14,8 +14,10 @@ Usage
 -----
 
 ```bash
-./watchdog --types styl --watch /var/www/vhosts/clients/ReTargeter/public/css/
-./watchdog --types styl,sass,scss,less,jade,haml --watch /var/www/vhosts/clients/ReTargeter/public/css/
+./watchdog --types styl --watch /path/to/public/css/
+./watchdog --types styl,sass,scss,less,jade,haml --watch /path/to/public/css/
+./watchdog --types styl,less --watch /path/to/public/css/ --ignore mixins.less 
+./watchdog --types less --watch /path/to/public/css/less/ --ignore mixins.less --
 ./watchdog --config /path/to/config
 ./watchdog --help
 ```
@@ -30,9 +32,38 @@ return array(
         '/path/to/public/css',
         '/path/to/alternate/css'
     ),
-    'minify' => true
+    'minify' => true,
+    'ignore' => array()
 );
 ```
+
+Example Config File demonstrating all settings:
+
+```php
+<?php
+return array(
+    'types' => array('sass', 'scss', 'less', 'styl', 'jade', 'haml'),
+    'watch' => array(
+        // key => val equivalent to input file for compilation => output file (result of compiling)
+        '/path/to/public/css/dynamic/' => '/path/to/public/css/',
+        // assume the input path and output path are the same
+        '/path/to/alternate/css',
+        // watch a specific file
+        '/path/to/public/html/view.jade'
+    ),
+    'minify' => true,
+    'ignore' => array(
+        'mixins.less'
+    )
+);
+```
+
+Settings
+--------
+
+The configuration file is slightly more customizable than specifying arguments via the command line.
+For starters, you can specify both the input file/directory and output file/directory of watched files/directories
+which comes in handy if you store your files in two separate directories.
 
 Requirements
 ------------

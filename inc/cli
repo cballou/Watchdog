@@ -46,6 +46,7 @@ Options:
 
   -t\t--types <extension>\t\tSpecify the file extensions to watch, separated by commas with no spaces (supports sass, scss, less, styl, haml, jade).
   -w\t--watch <directories>\t\tSpecify the directories to watch for file changes, separated by commas with no spaces.
+  -i\t--ignore <filenames>\t\tSpecify filenames you wish to ignore, separated by commas with no spaces.
   -c\t--config <file>\t\t\tSpecify an absolute/relative path to a config file to load options.
   -m\t--minify\t\t\tFlag to indicate you wish to minify/compress output.
   -h\t--help\t\t\t\tThis help documentation.
@@ -115,7 +116,14 @@ if (empty($directoryWatch)) {
 
 // console log
 echo 'Watching the following directories:' . PHP_EOL;
-echo '  ' . implode(PHP_EOL . '  ', $directoryWatch) . PHP_EOL . PHP_EOL;
+foreach ($directoryWatch as $in => $out) {
+    if (is_numeric($in)) {
+        echo '  ' . $out . PHP_EOL;
+    } else {
+        echo '  ' . $in . ' (output to ' . $out . ')' . PHP_EOL;
+    }
+}
+echo PHP_EOL;
 
 // determine file extensions to watch for
 if (!empty($config['types'])) {
@@ -162,4 +170,22 @@ if (!empty($config['minify'])) {
     $minified = true;
 } else if (isset($options['minify'])) {
     $minified = true;
+}
+
+// determine if we're ignoring any files
+$ignoredFiles = array();
+if (!empty($config['ignore'])) {
+    $ignoredFiles = (array) $config['ignore'];
+} else if (!empty($options['i'])) {
+    $ignoredFiles = $options['i'];
+} else if (!empty($options['ignore'])) {
+    $ignoredFiles = $options['ignore'];
+}
+
+if (!is_array($ignoredFiles)) {
+    $ignoredFiles = explode(',', $ignoredFiles);
+}
+
+if (!empty($ignoredFiles)) {
+    echo 'Ignoring files: ' . implode(', ', $ignoredFiles) . PHP_EOL . PHP_EOL;
 }
