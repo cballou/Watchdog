@@ -166,3 +166,7 @@ appropriately set:
 echo 'export NODE_PATH=/usr/local/lib/node_modules' >> ~/.profile
 source ~/.profile
 ```
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/cballou/watchdog/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
